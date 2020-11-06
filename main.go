@@ -6,6 +6,10 @@ import (
 	"fmt"
 	"github.com/Haydn0230/Link"
 	"io/ioutil"
+	"log"
+	"net/http"
+	"net/url"
+	"strings"
 )
 
 type options struct {
@@ -13,7 +17,11 @@ type options struct {
 	url string
 }
 
-//stash.skybet.net
+type SiteMap struct {
+	url string `json:"url"`
+	pages []SiteMap `json:"pages"`
+}
+
 func main() {
 	//op := getFlags()
 
@@ -26,23 +34,47 @@ func main() {
 	//fmt.Printf("\n%v - %v\n", res.Status, res.StatusCode)
 
 	//scanner := bufio.NewScanner(res.Body)
-	htmlDoc, err := ioutil.ReadFile("./calhoun.html")
-	if err != nil {
-		fmt.Printf("Error %+v/n",err)
-	}
-	r := bytes.NewReader(htmlDoc)
-	ll, err := Link.Parse(r)
-	if err != nil {
-		fmt.Printf("Error %+v/n",err)
-	}
+	//urlFlag := "./calhoun.html"
 
-	fmt.Printf("\n RESULTS \n %+v",ll)
+	//sitemap := SiteMap{
+	//	url:   urlFlag,
+	//	pages: buildSiteMap(urlFlag),
+	//}
+
+
+	//fmt.Printf("\n RESULTS \n %+v", links)
+
 	//for scanner.Scan() {
 	//
 	//	fmt.Print(scanner.Text())
 	//}
 
 }
+
+func buildSiteMap(count, depth int, url string) []SiteMap {
+	count ++
+	if count == depth {
+		return []SiteMap{}
+	}
+
+	links, err := linksFromFiles(url)
+	if err != nil {
+		log.Fatalf("Error %v", err)
+	}
+
+	var sitemaps = make([]SiteMap, 0)
+	for _, link := range filter(links) {
+		sitemap := SiteMap{
+			url:   link,
+			pages: buildSiteMap(count, depth, link),
+		}
+		sitemaps = append(sitemaps, sitemap)
+	}
+
+	return sitemaps
+}
+
+
 
 
 func getFlags() options {
@@ -54,5 +86,52 @@ func getFlags() options {
 	flag.Parse()
 	return op
 }
+
+func linksFromFiles(path string) ([]Link.Link, error){
+	htmlDoc, err := ioutil.ReadFile("./testBuildSiteMapper.html")
+	if err != nil {
+		return []Link.Link{}, err
+	}
+	r := bytes.NewReader(htmlDoc)
+
+	return Link.Parse(r)
+}
+
+func HTML(url string) {
+	res, err := http.Get(url)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer res.Body.Close()
+
+	fmt.Printf("\n%v - %v\n", res.Status, res.StatusCode)
+}
+
+func filter(links []Link.Link) []string {
+	filteredLinks :=make([]string,0,len(links))
+	for _, l := range links {
+		url, _ := url.Parse(l.Href)
+
+		if url == nil {
+			continue
+		}
+
+		if strings.Compare(url.Host, "www.calhoun.io") == 0 {
+			filteredLinks = append(filteredLinks, l.Href)
+		}
+
+		if url.Host == "" && url.Path != "" {
+			filteredLinks = append(filteredLinks, l.Href)
+		}
+	}
+	return filteredLinks
+}
+
+//lb, err := json.Marshal(links)
+//if err !=nil {
+//fmt.Printf("Error %+v/n",err)
+//}
+//
+//ioutil.WriteFile("./testFilterData.json", lb, 0777)
 
 
